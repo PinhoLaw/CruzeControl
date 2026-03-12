@@ -7,15 +7,14 @@ import Link from "next/link";
 
 interface Event {
   id: string;
-  dealer_name: string;
+  name: string;
+  dealer_name: string | null;
   franchise: string | null;
   city: string | null;
   state: string | null;
   start_date: string | null;
   end_date: string | null;
   status: string;
-  pack_new: number;
-  pack_used: number;
 }
 
 interface DealSummary {
@@ -66,10 +65,21 @@ export default function EventDashboard() {
       }
       setEvent(eventData);
 
-      // Load deals for stats
+      // Load event_config for pack values
+      const { data: config } = await supabase
+        .from("event_config")
+        .select("pack_new, pack_used, jde_commission_pct")
+        .eq("event_id", eventId)
+        .single();
+
+      const packNew = Number(config?.pack_new) || 0;
+      const packUsed = Number(config?.pack_used) || 0;
+      const jdePct = Number(config?.jde_commission_pct) || 0.25;
+
+      // Load deals for stats from sales_deals
       const { data: deals } = await supabase
-        .from("deals")
-        .select("front_gross, reserve, warranty, aft1, gap, new_used")
+        .from("sales_deals")
+        .select("front_gross, reserve, warranty, aftermarket_1, gap, new_used, total_gross")
         .eq("event_id", eventId);
 
       if (deals && deals.length > 0) {
@@ -77,20 +87,12 @@ export default function EventDashboard() {
         let nonCommGross = 0;
 
         deals.forEach((d) => {
-          const fiTotal =
-            (d.reserve || 0) +
-            (d.warranty || 0) +
-            (d.aft1 || 0) +
-            (d.gap || 0);
-          const dealGross = (d.front_gross || 0) + fiTotal;
-          totalGross += dealGross;
-
-          const pack =
-            d.new_used === "New" ? eventData.pack_new : eventData.pack_used;
-          nonCommGross += pack || 0;
+          totalGross += Number(d.total_gross) || 0;
+          const pack = d.new_used === "New" ? packNew : packUsed;
+          nonCommGross += pack;
         });
 
-        const jdeCommission = totalGross * 0.25;
+        const jdeCommission = totalGross * jdePct;
         const totalNet = totalGross - jdeCommission + nonCommGross;
 
         setStats({
@@ -140,6 +142,8 @@ export default function EventDashboard() {
     );
   }
 
+  const displayName = event.dealer_name || event.name;
+
   return (
     <div className="min-h-screen bg-jde-bg">
       {/* Header */}
@@ -156,7 +160,7 @@ export default function EventDashboard() {
               </Link>
               <div>
                 <h1 className="text-xl font-bold text-jde-text">
-                  {event.dealer_name}
+                  {displayName}
                 </h1>
                 <p className="text-sm text-jde-muted">
                   {event.franchise && `${event.franchise} · `}

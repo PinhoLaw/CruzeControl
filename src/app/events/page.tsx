@@ -6,13 +6,14 @@ import Link from "next/link";
 
 interface EventRow {
   id: string;
-  dealer_name: string;
+  dealer_name: string | null;
   franchise: string | null;
   city: string | null;
   state: string | null;
   start_date: string | null;
   end_date: string | null;
   status: string;
+  name: string;
   deal_count: number;
 }
 
@@ -33,9 +34,9 @@ export default function EventsPage() {
         return;
       }
 
-      // Get deal counts per event
+      // Get deal counts per event from sales_deals
       const { data: dealCounts } = await supabase
-        .from("deals")
+        .from("sales_deals")
         .select("event_id");
 
       const countMap: Record<string, number> = {};
@@ -45,13 +46,14 @@ export default function EventsPage() {
 
       const mapped: EventRow[] = eventsData.map((e) => ({
         id: e.id,
-        dealer_name: e.dealer_name,
+        dealer_name: e.dealer_name || e.name,
         franchise: e.franchise,
         city: e.city,
         state: e.state,
         start_date: e.start_date,
         end_date: e.end_date,
         status: e.status,
+        name: e.name,
         deal_count: countMap[e.id] || 0,
       }));
 
@@ -123,9 +125,7 @@ export default function EventsPage() {
         ) : events.length === 0 ? (
           <div className="text-center py-16 text-jde-muted">
             <p className="text-lg mb-2">No events yet</p>
-            <p className="text-sm">
-              Create your first event to get started.
-            </p>
+            <p className="text-sm">Create your first event to get started.</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -138,7 +138,7 @@ export default function EventsPage() {
                 <div className="flex items-start justify-between mb-3">
                   <div>
                     <h3 className="font-semibold text-jde-text">
-                      {event.dealer_name}
+                      {event.dealer_name || event.name}
                     </h3>
                     {event.franchise && (
                       <p className="text-sm text-jde-muted">
