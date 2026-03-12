@@ -9,8 +9,23 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        background: "var(--background)",
-        foreground: "var(--foreground)",
+        jde: {
+          bg: "#0a0f1e",
+          surface: "#0f172a",
+          panel: "#1e293b",
+          border: "#334155",
+          cyan: "#22d3ee",
+          success: "#34d399",
+          purple: "#a78bfa",
+          warning: "#fbbf24",
+          danger: "#f87171",
+          text: "#e2e8f0",
+          muted: "#94a3b8",
+          input: "#1e3a5f",
+        },
+      },
+      fontFamily: {
+        mono: ['"IBM Plex Mono"', "monospace"],
       },
     },
   },
