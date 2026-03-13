@@ -248,8 +248,8 @@ export default function EventDashboard() {
             </Link>
           </div>
 
-          {/* Stat pills — 6 equal boxes in one row */}
-          <div className="grid grid-cols-6 gap-2 mb-4">
+          {/* Stat pills — 3 cols on mobile, 6 on desktop */}
+          <div className="grid grid-cols-3 md:grid-cols-6 gap-2 mb-4">
             <StatPill
               label="Total Deals"
               value={String(stats.total_deals)}
@@ -293,12 +293,12 @@ export default function EventDashboard() {
           </div>
 
           {/* Tab navigation */}
-          <div className="flex gap-1 -mb-[1px]">
+          <div className="flex gap-1 -mb-[1px] overflow-x-auto scrollbar-hide">
             {TABS.map((tab) => (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
-                className={`px-5 py-2.5 text-[13px] rounded-t transition-all duration-200 ${
+                className={`px-3 md:px-5 py-2 md:py-2.5 text-[11px] md:text-[13px] rounded-t transition-all duration-200 whitespace-nowrap ${
                   activeTab === tab
                     ? "bg-jde-bg text-jde-cyan border border-jde-border border-b-jde-bg font-semibold shadow-glow-cyan"
                     : "text-jde-muted hover:text-jde-text"
@@ -360,10 +360,10 @@ function StatPill({
 
   return (
     <div
-      className={`px-3 py-2.5 rounded-lg border ${colorMap[color]} text-center`}
+      className={`px-1.5 py-2 md:px-3 md:py-2.5 rounded-lg border ${colorMap[color]} text-center min-w-0`}
     >
-      <div className="font-mono font-extrabold text-[15px] leading-tight">{value}</div>
-      <div className="text-[9px] uppercase tracking-wider opacity-60 mt-0.5">
+      <div className="font-mono font-extrabold text-[10px] sm:text-[13px] md:text-[15px] leading-tight truncate">{value}</div>
+      <div className="text-[7px] md:text-[9px] uppercase tracking-wider opacity-60 mt-0.5 truncate">
         {label}
       </div>
     </div>
@@ -391,18 +391,27 @@ function SplitStatPill({
 }) {
   return (
     <div
-      className={`px-3 py-2.5 rounded-lg border ${borderColor} ${bgColor} ${glowClass} text-center`}
+      className={`px-2 py-2 md:px-3 md:py-2.5 rounded-lg border ${borderColor} ${bgColor} ${glowClass} text-center min-w-0`}
     >
-      <div className="flex items-baseline justify-center gap-1">
-        <span className={`font-mono font-extrabold text-[15px] leading-tight ${topColor}`}>
+      {/* Stacked on mobile, side-by-side on desktop */}
+      <div className="hidden md:flex items-baseline justify-center gap-1 min-w-0">
+        <span className={`font-mono font-extrabold text-[15px] leading-tight truncate ${topColor}`}>
           {topValue}
         </span>
-        <span className="text-jde-muted/40 text-[10px]">/</span>
-        <span className={`font-mono font-extrabold text-[15px] leading-tight ${bottomColor}`}>
+        <span className="text-jde-muted/40 text-[10px] flex-shrink-0">/</span>
+        <span className={`font-mono font-extrabold text-[15px] leading-tight truncate ${bottomColor}`}>
           {bottomValue}
         </span>
       </div>
-      <div className="text-[9px] uppercase tracking-wider opacity-60 mt-0.5">
+      <div className="flex flex-col items-center md:hidden min-w-0">
+        <span className={`font-mono font-extrabold text-[11px] sm:text-[13px] leading-tight truncate max-w-full ${topColor}`}>
+          {topValue}
+        </span>
+        <span className={`font-mono font-extrabold text-[11px] sm:text-[13px] leading-tight truncate max-w-full ${bottomColor}`}>
+          {bottomValue}
+        </span>
+      </div>
+      <div className="text-[8px] md:text-[9px] uppercase tracking-wider opacity-60 mt-0.5 truncate">
         {label}
       </div>
     </div>
