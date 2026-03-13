@@ -9,3 +9,52 @@ body {
   background: #0a0f1e;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 }
+
+/* ── Glow borders (accent shadows) ─────────────────────────── */
+.glow-cyan {
+  box-shadow: 0 0 15px rgba(34, 211, 238, 0.15), 0 0 3px rgba(34, 211, 238, 0.1);
+}
+.glow-green {
+  box-shadow: 0 0 15px rgba(52, 211, 153, 0.15);
+}
+.glow-purple {
+  box-shadow: 0 0 15px rgba(167, 139, 250, 0.15);
+}
+.glow-amber {
+  box-shadow: 0 0 15px rgba(251, 191, 36, 0.15);
+}
+
+/* ── Header gradient ───────────────────────────────────────── */
+.header-gradient {
+  background: linear-gradient(180deg, #0f172a 0%, #0a0f1e 100%);
+}
+
+/* ── Loading skeleton shimmer ──────────────────────────────── */
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+.skeleton {
+  background: linear-gradient(90deg, #1e293b 25%, #334155 50%, #1e293b 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+  border-radius: 0.375rem;
+}
+
+/* ── Flash message entrance ────────────────────────────────── */
+@keyframes flash-in {
+  from { opacity: 0; transform: translateY(-8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.flash-animate {
+  animation: flash-in 0.2s ease-out;
+}
+
+/* ── Tab content fade-in ───────────────────────────────────── */
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.tab-content-enter {
+  animation: fade-in 0.15s ease-out;
+}

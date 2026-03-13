@@ -27,6 +27,12 @@ const config: Config = {
       fontFamily: {
         mono: ['"IBM Plex Mono"', "monospace"],
       },
+      boxShadow: {
+        "glow-cyan": "0 0 15px rgba(34, 211, 238, 0.15), 0 0 3px rgba(34, 211, 238, 0.1)",
+        "glow-green": "0 0 15px rgba(52, 211, 153, 0.15)",
+        "glow-purple": "0 0 15px rgba(167, 139, 250, 0.15)",
+        "glow-amber": "0 0 15px rgba(251, 191, 36, 0.15)",
+      },
     },
   },
   plugins: [],

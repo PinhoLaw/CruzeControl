@@ -32,6 +32,9 @@ create table public.events (
   pack_new        int default 0,
   pack_used       int default 0,
   pack_company    int default 0,
+  jde_pct         numeric default 25,
+  marketing_cost  int default 0,
+  misc_expenses   int default 0,
   status          text default 'draft' check (status in ('active', 'completed', 'draft')),
   created_at      timestamptz default now()
 );

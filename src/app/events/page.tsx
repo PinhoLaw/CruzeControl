@@ -34,9 +34,9 @@ export default function EventsPage() {
         return;
       }
 
-      // Get deal counts per event from sales_deals
+      // Get deal counts per event from deals
       const { data: dealCounts } = await supabase
-        .from("sales_deals")
+        .from("deals")
         .select("event_id");
 
       const countMap: Record<string, number> = {};
@@ -86,25 +86,28 @@ export default function EventsPage() {
     }
   }
 
-  async function handleSignOut() {
-    await supabase.auth.signOut();
-    window.location.href = "/login";
+  function accentColor(status: string) {
+    switch (status) {
+      case "active":
+        return "bg-jde-cyan";
+      case "completed":
+        return "bg-jde-success";
+      default:
+        return "bg-jde-muted/30";
+    }
   }
 
   return (
     <div className="min-h-screen bg-jde-bg">
       {/* Header */}
-      <div className="border-b border-jde-border bg-jde-surface">
-        <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
-          <h1 className="text-xl font-bold text-jde-cyan tracking-wide">
-            JDE MISSION CONTROL
-          </h1>
-          <button
-            onClick={handleSignOut}
-            className="text-sm text-jde-muted hover:text-jde-cyan transition-colors"
-          >
-            Sign Out
-          </button>
+      <div className="border-b border-jde-border header-gradient">
+        <div className="max-w-7xl mx-auto px-6 py-5 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <span className="inline-block w-2.5 h-2.5 rounded-full bg-jde-cyan shadow-glow-cyan" />
+            <h1 className="text-xl font-bold text-jde-cyan tracking-wide">
+              JDE MISSION CONTROL
+            </h1>
+          </div>
         </div>
       </div>
 
@@ -114,16 +117,34 @@ export default function EventsPage() {
           <h2 className="text-lg font-semibold text-jde-text">Events</h2>
           <Link
             href="/events/new"
-            className="px-4 py-2 rounded border border-jde-cyan text-jde-cyan text-sm hover:bg-jde-cyan/10 transition-colors"
+            className="px-4 py-2 rounded-lg border border-jde-cyan text-jde-cyan text-sm font-medium hover:bg-jde-cyan/10 hover:scale-[1.02] active:scale-[0.98] transition-all duration-200"
           >
             + New Event
           </Link>
         </div>
 
         {loading ? (
-          <div className="text-jde-muted">Loading...</div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {[1, 2, 3].map((i) => (
+              <div
+                key={i}
+                className="rounded-lg bg-jde-surface border border-jde-border p-5 relative overflow-hidden"
+              >
+                <div className="absolute left-0 top-0 bottom-0 w-1 bg-jde-border" />
+                <div className="pl-2">
+                  <div className="skeleton h-5 w-3/4 mb-3" />
+                  <div className="skeleton h-3 w-1/2 mb-2" />
+                  <div className="skeleton h-3 w-2/3 mb-4" />
+                  <div className="border-t border-jde-border pt-3 mt-3">
+                    <div className="skeleton h-4 w-16" />
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
         ) : events.length === 0 ? (
           <div className="text-center py-16 text-jde-muted">
+            <div className="text-4xl mb-4 opacity-40">🚗</div>
             <p className="text-lg mb-2">No events yet</p>
             <p className="text-sm">Create your first event to get started.</p>
           </div>
@@ -133,8 +154,10 @@ export default function EventsPage() {
               <Link
                 key={event.id}
                 href={`/events/${event.id}`}
-                className="block p-5 rounded-lg bg-jde-surface border border-jde-border hover:border-jde-cyan/50 transition-colors"
+                className="block py-5 pr-5 pl-7 rounded-lg bg-jde-surface border border-jde-border hover:border-jde-cyan/50 hover:shadow-glow-cyan transition-all duration-200 relative overflow-hidden"
               >
+                <div className={`absolute left-0 top-0 bottom-0 w-1 ${accentColor(event.status)}`} />
+
                 <div className="flex items-start justify-between mb-3">
                   <div>
                     <h3 className="font-semibold text-jde-text">
@@ -168,10 +191,10 @@ export default function EventsPage() {
                 </div>
 
                 <div className="mt-3 pt-3 border-t border-jde-border">
-                  <span className="font-mono text-sm text-jde-cyan">
+                  <span className="font-mono text-base font-bold text-jde-cyan">
                     {event.deal_count}
                   </span>
-                  <span className="text-sm text-jde-muted ml-1">
+                  <span className="text-sm text-jde-muted ml-1.5">
                     {event.deal_count === 1 ? "deal" : "deals"}
                   </span>
                 </div>
