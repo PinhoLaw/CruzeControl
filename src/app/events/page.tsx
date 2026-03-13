@@ -15,6 +15,7 @@ interface EventRow {
   status: string;
   name: string;
   deal_count: number;
+  total_gross: number;
 }
 
 export default function EventsPage() {
@@ -34,14 +35,16 @@ export default function EventsPage() {
         return;
       }
 
-      // Get deal counts per event from deals
-      const { data: dealCounts } = await supabase
+      // Get deal counts and total gross per event
+      const { data: dealData } = await supabase
         .from("deals")
-        .select("event_id");
+        .select("event_id, total_gross");
 
       const countMap: Record<string, number> = {};
-      dealCounts?.forEach((d) => {
+      const grossMap: Record<string, number> = {};
+      dealData?.forEach((d) => {
         countMap[d.event_id] = (countMap[d.event_id] || 0) + 1;
+        grossMap[d.event_id] = (grossMap[d.event_id] || 0) + (Number(d.total_gross) || 0);
       });
 
       const mapped: EventRow[] = eventsData.map((e) => ({
@@ -55,6 +58,7 @@ export default function EventsPage() {
         status: e.status,
         name: e.name,
         deal_count: countMap[e.id] || 0,
+        total_gross: grossMap[e.id] || 0,
       }));
 
       setEvents(mapped);
@@ -71,6 +75,14 @@ export default function EventsPage() {
       day: "numeric",
       year: "numeric",
     });
+  }
+
+  function formatCurrency(n: number) {
+    return new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: "USD",
+      maximumFractionDigits: 0,
+    }).format(n);
   }
 
   function statusColor(status: string) {
@@ -190,13 +202,24 @@ export default function EventsPage() {
                   </p>
                 </div>
 
-                <div className="mt-3 pt-3 border-t border-jde-border">
+                <div className="mt-3 pt-3 border-t border-jde-border flex items-center">
                   <span className="font-mono text-base font-bold text-jde-cyan">
                     {event.deal_count}
                   </span>
                   <span className="text-sm text-jde-muted ml-1.5">
                     {event.deal_count === 1 ? "deal" : "deals"}
                   </span>
+                  {event.deal_count > 0 && (
+                    <>
+                      <span className="text-jde-border mx-3">|</span>
+                      <span className="font-mono text-base font-bold text-jde-success">
+                        {formatCurrency(event.total_gross)}
+                      </span>
+                      <span className="text-sm text-jde-muted ml-1.5">
+                        total gross
+                      </span>
+                    </>
+                  )}
                 </div>
               </Link>
             ))}

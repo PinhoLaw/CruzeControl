@@ -132,9 +132,10 @@ export default function EventSettings() {
       setTimeout(() => {
         router.push(`/events/${eventId}`);
       }, 800);
-    } catch (err) {
-      console.error("Failed to save:", err);
-      setFlash({ type: "error", msg: "Failed to save settings" });
+    } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message : typeof err === 'object' && err !== null && 'message' in err ? String((err as Record<string, unknown>).message) : JSON.stringify(err);
+      console.error("Failed to save:", errMsg, err);
+      setFlash({ type: "error", msg: `Failed to save: ${errMsg}` });
       setTimeout(() => setFlash(null), 2400);
     } finally {
       setSaving(false);

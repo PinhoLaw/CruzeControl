@@ -27,10 +27,10 @@ interface Event {
 interface DealSummary {
   total_deals: number;
   total_gross: number;
-  front_gross: number;
-  back_gross: number;
   new_count: number;
   used_count: number;
+  new_gross: number;
+  used_gross: number;
   warranty_count: number;
   gap_count: number;
 }
@@ -73,10 +73,10 @@ export default function EventDashboard() {
   const [stats, setStats] = useState<DealSummary>({
     total_deals: 0,
     total_gross: 0,
-    front_gross: 0,
-    back_gross: 0,
     new_count: 0,
     used_count: 0,
+    new_gross: 0,
+    used_gross: 0,
     warranty_count: 0,
     gap_count: 0,
   });
@@ -115,24 +115,28 @@ export default function EventDashboard() {
       // Load deals for stats
       const { data: deals } = await supabase
         .from("deals")
-        .select("front_gross, fi_total, new_used, total_gross, warranty, gap")
+        .select("new_used, total_gross, warranty, gap")
         .eq("event_id", eventId);
 
       if (deals && deals.length > 0) {
         let totalGross = 0;
-        let frontGross = 0;
-        let backGross = 0;
         let newCount = 0;
         let usedCount = 0;
+        let newGross = 0;
+        let usedGross = 0;
         let warrantyCount = 0;
         let gapCount = 0;
 
         deals.forEach((d) => {
-          totalGross += Number(d.total_gross) || 0;
-          frontGross += Number(d.front_gross) || 0;
-          backGross += Number(d.fi_total) || 0;
-          if (d.new_used === "New") newCount++;
-          else usedCount++;
+          const gross = Number(d.total_gross) || 0;
+          totalGross += gross;
+          if (d.new_used === "New") {
+            newCount++;
+            newGross += gross;
+          } else {
+            usedCount++;
+            usedGross += gross;
+          }
           if ((Number(d.warranty) || 0) > 0) warrantyCount++;
           if ((Number(d.gap) || 0) > 0) gapCount++;
         });
@@ -140,10 +144,10 @@ export default function EventDashboard() {
         setStats({
           total_deals: deals.length,
           total_gross: totalGross,
-          front_gross: frontGross,
-          back_gross: backGross,
           new_count: newCount,
           used_count: usedCount,
+          new_gross: newGross,
+          used_gross: usedGross,
           warranty_count: warrantyCount,
           gap_count: gapCount,
         });
@@ -257,16 +261,6 @@ export default function EventDashboard() {
               color="green"
             />
             <SplitStatPill
-              topValue={formatCurrency(stats.front_gross)}
-              topColor="text-jde-success"
-              bottomValue={formatCurrency(stats.back_gross)}
-              bottomColor="text-jde-purple"
-              label="Front / Back"
-              borderColor="border-jde-success/30"
-              bgColor="bg-jde-success/10"
-              glowClass="shadow-glow-green"
-            />
-            <SplitStatPill
               topValue={String(stats.new_count)}
               topColor="text-jde-cyan"
               bottomValue={String(stats.used_count)}
@@ -276,10 +270,20 @@ export default function EventDashboard() {
               bgColor="bg-jde-cyan/10"
               glowClass="shadow-glow-cyan"
             />
+            <SplitStatPill
+              topValue={formatCurrency(stats.new_count > 0 ? stats.new_gross / stats.new_count : 0)}
+              topColor="text-jde-success"
+              bottomValue={formatCurrency(stats.used_count > 0 ? stats.used_gross / stats.used_count : 0)}
+              bottomColor="text-jde-warning"
+              label="New Avg / Used Avg"
+              borderColor="border-jde-success/30"
+              bgColor="bg-jde-success/10"
+              glowClass="shadow-glow-green"
+            />
             <StatPill
               label="Warranty"
               value={`${stats.warranty_count} / ${stats.total_deals} (${stats.total_deals > 0 ? Math.round((stats.warranty_count / stats.total_deals) * 100) : 0}%)`}
-              color="green"
+              color="cyan"
             />
             <StatPill
               label="GAP"
