@@ -240,12 +240,6 @@ export default function EventDashboard() {
                 </p>
               </div>
             </div>
-            <Link
-              href={`/events/${eventId}/settings`}
-              className="px-3 py-1.5 rounded-lg border border-jde-border text-sm text-jde-muted hover:text-jde-cyan hover:border-jde-cyan hover:shadow-glow-cyan transition-all duration-200"
-            >
-              ⚙ Settings
-            </Link>
           </div>
 
           {/* Stat pills — 3 cols on mobile, 6 on desktop */}
