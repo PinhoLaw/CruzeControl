@@ -1,6 +1,6 @@
 /**
  * Migration script: Advantage Nissan August 2025
- * Reads reference/Advantage_Nissan_August_2025.xlsx and inserts into Supabase.
+ * Reads reference/Advantage_Nissan_August_2025__1_.xlsx and inserts into Supabase.
  *
  * Usage: npx tsx scripts/migrate-advantage-nissan-aug25.ts
  */
@@ -17,7 +17,7 @@ const sb = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY as string
 );
 
-const FILE = path.resolve(__dirname, "../reference/Advantage_Nissan_August_2025.xlsx");
+const FILE = path.resolve(__dirname, "../reference/Advantage_Nissan_August_2025__1_.xlsx");
 
 const DEFAULT_LENDERS = [
   "BECU", "KITSAP", "HARBORSTONE", "GESA", "GLOBAL", "ALLY", "NMAC", "CPS",
@@ -257,9 +257,13 @@ async function main() {
     // Parse combined vehicle field
     const vehicle = parseVehicle(r[8]);
 
-    // Normalize new_used
-    const rawNewUsed = safeStr(r[7]);
-    const newUsed = rawNewUsed?.toUpperCase() === "NEW" ? "New" : "Used";
+    // New/Used: stock matches ^(25|26)-\d+$ (no letter suffix) → New, else Used
+    // Exception: B-06792 (deal 9) is also New per dealer records
+    const stockNum = safeStr(r[4]);
+    const isNew = stockNum != null && (
+      /^(25|26)-\d+$/.test(stockNum) || stockNum === "B-06792"
+    );
+    const newUsed = isNew ? "New" : "Used";
 
     // Parse trade info
     const trade = parseTrade(r[11]);
@@ -302,6 +306,10 @@ async function main() {
   if (skippedSp.size > 0) {
     console.log(`  Warning: unmatched salesperson names: ${Array.from(skippedSp).join(", ")}`);
   }
+
+  const newCount = dealRows.filter((d) => d.new_used === "New").length;
+  const usedCount = dealRows.filter((d) => d.new_used === "Used").length;
+  console.log(`  New/Used breakdown: ${newCount} New, ${usedCount} Used`);
 
   let dealsInserted = 0;
   for (let i = 0; i < dealRows.length; i += 25) {
