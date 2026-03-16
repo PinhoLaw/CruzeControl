@@ -18,9 +18,17 @@ interface EventRow {
   total_gross: number;
 }
 
+interface AggStats {
+  totalDeals: number;
+  totalGross: number;
+  totalUps: number;
+  totalDays: number;
+}
+
 export default function EventsPage() {
   const [events, setEvents] = useState<EventRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [agg, setAgg] = useState<AggStats>({ totalDeals: 0, totalGross: 0, totalUps: 0, totalDays: 0 });
   const supabase = createClient();
 
   useEffect(() => {
@@ -40,12 +48,38 @@ export default function EventsPage() {
         .from("deals")
         .select("event_id, total_gross");
 
+      // Get mail tracking UPs
+      const { data: mailData } = await supabase
+        .from("mail_tracking")
+        .select("event_id, day_1, day_2, day_3, day_4, day_5, day_6, day_7, day_8, day_9, day_10, day_11");
+
       const countMap: Record<string, number> = {};
       const grossMap: Record<string, number> = {};
       dealData?.forEach((d) => {
         countMap[d.event_id] = (countMap[d.event_id] || 0) + 1;
         grossMap[d.event_id] = (grossMap[d.event_id] || 0) + (Number(d.total_gross) || 0);
       });
+
+      // Compute UPs per event
+      const upsMap: Record<string, number> = {};
+      mailData?.forEach((m) => {
+        const ups = (m.day_1||0)+(m.day_2||0)+(m.day_3||0)+(m.day_4||0)+(m.day_5||0)+(m.day_6||0)+(m.day_7||0)+(m.day_8||0)+(m.day_9||0)+(m.day_10||0)+(m.day_11||0);
+        upsMap[m.event_id] = (upsMap[m.event_id] || 0) + ups;
+      });
+
+      // Compute aggregate stats
+      let totalDeals = 0, totalGross = 0, totalUps = 0, totalDays = 0;
+      eventsData.forEach((e) => {
+        totalDeals += countMap[e.id] || 0;
+        totalGross += grossMap[e.id] || 0;
+        totalUps += upsMap[e.id] || 0;
+        if (e.start_date && e.end_date) {
+          const start = new Date(e.start_date + "T00:00:00");
+          const end = new Date(e.end_date + "T00:00:00");
+          totalDays += Math.round((end.getTime() - start.getTime()) / 86400000) + 1;
+        }
+      });
+      setAgg({ totalDeals, totalGross, totalUps, totalDays });
 
       const mapped: EventRow[] = eventsData.map((e) => ({
         id: e.id,
@@ -120,6 +154,30 @@ export default function EventsPage() {
               JDE MISSION CONTROL
             </h1>
           </div>
+          {!loading && agg.totalDays > 0 && (
+            <div className="flex items-center gap-4 md:gap-6">
+              <div className="text-right">
+                <div className="font-mono text-sm md:text-base font-bold text-jde-cyan">
+                  {(agg.totalDeals / agg.totalDays).toFixed(1)}
+                </div>
+                <div className="text-[9px] md:text-[10px] text-jde-muted uppercase tracking-wider">Deals / Day</div>
+              </div>
+              <div className="w-px h-8 bg-jde-border" />
+              <div className="text-right">
+                <div className="font-mono text-sm md:text-base font-bold text-jde-success">
+                  {formatCurrency(Math.round(agg.totalGross / agg.totalDays))}
+                </div>
+                <div className="text-[9px] md:text-[10px] text-jde-muted uppercase tracking-wider">Gross / Day</div>
+              </div>
+              <div className="w-px h-8 bg-jde-border" />
+              <div className="text-right">
+                <div className="font-mono text-sm md:text-base font-bold text-jde-purple">
+                  {(agg.totalUps / agg.totalDays).toFixed(1)}
+                </div>
+                <div className="text-[9px] md:text-[10px] text-jde-muted uppercase tracking-wider">UPs / Day</div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 

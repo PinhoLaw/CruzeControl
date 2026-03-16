@@ -18,8 +18,6 @@ export default function DealLogContainer({ eventId }: Props) {
   const [salespeople, setSalespeople] = useState<SalespersonRow[]>([]);
   const [lenders, setLenders] = useState<LenderRow[]>([]);
   const [loading, setLoading] = useState(true);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [addingNew, setAddingNew] = useState(false);
   const [flash, setFlash] = useState<{ type: "success" | "error"; msg: string } | null>(null);
 
   const showFlash = useCallback((type: "success" | "error", msg: string) => {
@@ -55,24 +53,40 @@ export default function DealLogContainer({ eventId }: Props) {
     (s) => s.type === SalespersonType.Manager
   );
 
-  async function handleSave(deal: DealInsert) {
+  // Inline save: upsert and update local state without full reload
+  async function handleSave(deal: DealInsert): Promise<DealRow> {
+    const saved = await upsertDeal(deal);
+    setDeals((prev) => prev.map((d) => (d.id === saved.id ? saved : d)));
+    return saved;
+  }
+
+  // Add new empty deal to DB immediately, then append to local state
+  async function handleAdd() {
+    const insert: DealInsert = {
+      event_id: eventId,
+      front_gross: 0,
+      reserve: 0,
+      warranty: 0,
+      aft1: 0,
+      gap: 0,
+      acv: 0,
+      payoff: 0,
+      funded: false,
+    };
     try {
-      await upsertDeal(deal);
-      showFlash("success", "Deal saved");
-      setEditingId(null);
-      setAddingNew(false);
-      await loadData();
+      const created = await upsertDeal(insert);
+      setDeals((prev) => [...prev, created]);
+      showFlash("success", "New deal row added");
     } catch {
-      showFlash("error", "Failed to save deal");
+      showFlash("error", "Failed to add deal");
     }
   }
 
   async function handleDelete(id: string) {
     try {
       await deleteDeal(id);
+      setDeals((prev) => prev.filter((d) => d.id !== id));
       showFlash("success", "Deal deleted");
-      setEditingId(null);
-      await loadData();
     } catch {
       showFlash("error", "Failed to delete deal");
     }
@@ -119,10 +133,7 @@ export default function DealLogContainer({ eventId }: Props) {
           </span>
         </div>
         <button
-          onClick={() => {
-            setAddingNew(true);
-            setEditingId(null);
-          }}
+          onClick={handleAdd}
           className="px-3 py-1.5 rounded border border-jde-cyan text-jde-cyan text-sm hover:bg-jde-cyan/10 hover:scale-[1.02] active:scale-[0.98] transition-all duration-200"
         >
           + Add Deal
@@ -145,6 +156,7 @@ export default function DealLogContainer({ eventId }: Props) {
               <th className="px-3 py-2 text-left">Closer</th>
               <th className="px-3 py-2 text-right">Front</th>
               <th className="px-3 py-2 text-left">Lender</th>
+              <th className="px-3 py-2 text-right">Rate</th>
               <th className="px-3 py-2 text-right">Reserve</th>
               <th className="px-3 py-2 text-right">Warranty</th>
               <th className="px-3 py-2 text-right">Aft1</th>
@@ -152,54 +164,28 @@ export default function DealLogContainer({ eventId }: Props) {
               <th className="px-3 py-2 text-right">F&I</th>
               <th className="px-3 py-2 text-right">Total</th>
               <th className="px-3 py-2 text-center">Fund</th>
-              <th className="px-3 py-2 text-center w-20">Actions</th>
+              <th className="px-3 py-2 text-center w-16"></th>
               <th className="px-3 py-2 text-left">Notes</th>
             </tr>
           </thead>
           <tbody>
-            {/* Add new row */}
-            {addingNew && (
+            {deals.map((deal, idx) => (
               <DealRowEditor
+                key={deal.id}
                 eventId={eventId}
-                deal={null}
+                deal={deal}
+                index={idx}
                 reps={reps}
                 managers={managers}
                 lenders={lenders}
                 onSave={handleSave}
-                onCancel={() => setAddingNew(false)}
+                onDelete={handleDelete}
               />
-            )}
+            ))}
 
-            {deals.map((deal, idx) =>
-              editingId === deal.id ? (
-                <DealRowEditor
-                  key={deal.id}
-                  eventId={eventId}
-                  deal={deal}
-                  reps={reps}
-                  managers={managers}
-                  lenders={lenders}
-                  onSave={handleSave}
-                  onCancel={() => setEditingId(null)}
-                  onDelete={() => handleDelete(deal.id)}
-                />
-              ) : (
-                <DealRowDisplay
-                  key={deal.id}
-                  deal={deal}
-                  idx={idx}
-                  salespeople={salespeople}
-                  onEdit={() => {
-                    setEditingId(deal.id);
-                    setAddingNew(false);
-                  }}
-                />
-              )
-            )}
-
-            {deals.length === 0 && !addingNew && (
+            {deals.length === 0 && (
               <tr>
-                <td colSpan={20} className="text-center py-8 text-jde-muted">
+                <td colSpan={21} className="text-center py-8 text-jde-muted">
                   No deals yet. Click &quot;+ Add Deal&quot; to get started.
                 </td>
               </tr>
@@ -208,109 +194,5 @@ export default function DealLogContainer({ eventId }: Props) {
         </table>
       </div>
     </div>
-  );
-}
-
-/** Read-only display row */
-function DealRowDisplay({
-  deal,
-  idx,
-  salespeople,
-  onEdit,
-}: {
-  deal: DealRow;
-  idx: number;
-  salespeople: SalespersonRow[];
-  onEdit: () => void;
-}) {
-  const sp1 = salespeople.find((s) => s.id === deal.salesperson_id);
-  const sp2 = salespeople.find((s) => s.id === deal.salesperson2_id);
-  const closer = salespeople.find((s) => s.id === deal.closer_id);
-  const rowBg = idx % 2 === 0 ? "bg-jde-surface" : "bg-jde-bg";
-
-  return (
-    <tr
-      className={`${rowBg} hover:bg-jde-panel/50 cursor-pointer transition-colors`}
-      onClick={onEdit}
-    >
-      <td className="px-3 py-2 font-mono text-jde-muted">{deal.deal_num || idx + 1}</td>
-      <td className="px-3 py-2 text-jde-muted">
-        {deal.deal_date
-          ? new Date(deal.deal_date + "T00:00:00").toLocaleDateString("en-US", {
-              month: "numeric",
-              day: "numeric",
-            })
-          : "—"}
-      </td>
-      <td className="px-3 py-2 text-jde-text">{deal.customer_name || "—"}</td>
-      <td className="px-3 py-2 font-mono text-jde-muted">{deal.customer_zip || "—"}</td>
-      <td className="px-3 py-2">
-        <span
-          className={`text-xs font-medium ${
-            deal.new_used === "New" ? "text-jde-cyan" : "text-jde-warning"
-          }`}
-        >
-          {deal.new_used || "—"}
-        </span>
-      </td>
-      <td className="px-3 py-2 text-jde-text">
-        {deal.year || deal.make || deal.model
-          ? `${deal.year ?? ""} ${deal.make ?? ""} ${deal.model ?? ""}`.trim()
-          : "—"}
-      </td>
-      <td className="px-3 py-2 text-jde-text">{sp1?.name || "—"}</td>
-      <td className="px-3 py-2 text-jde-muted">{sp2?.name || ""}</td>
-      <td className="px-3 py-2 text-jde-muted">{closer?.name || "—"}</td>
-      <td className="px-3 py-2 text-right font-mono text-jde-text">
-        {formatCurrency(deal.front_gross)}
-      </td>
-      <td className="px-3 py-2 text-jde-muted">{deal.lender || "—"}</td>
-      <td className="px-3 py-2 text-right font-mono text-jde-muted">
-        {formatCurrency(deal.reserve)}
-      </td>
-      <td className="px-3 py-2 text-right font-mono text-jde-muted">
-        {formatCurrency(deal.warranty)}
-      </td>
-      <td className="px-3 py-2 text-right font-mono text-jde-muted">
-        {formatCurrency(deal.aft1)}
-      </td>
-      <td className="px-3 py-2 text-right font-mono text-jde-muted">
-        {formatCurrency(deal.gap)}
-      </td>
-      <td className="px-3 py-2 text-right font-mono text-jde-purple">
-        {formatCurrency(deal.fi_total)}
-      </td>
-      <td className="px-3 py-2 text-right font-mono font-semibold text-jde-success">
-        {formatCurrency(deal.total_gross)}
-      </td>
-      <td className="px-3 py-2 text-center">
-        {deal.funded ? (
-          <span className="text-jde-success">✓</span>
-        ) : (
-          <span className="text-jde-muted">—</span>
-        )}
-      </td>
-      <td className="px-3 py-2 text-center">
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            onEdit();
-          }}
-          className="text-jde-muted hover:text-jde-cyan text-xs transition-colors"
-        >
-          Edit
-        </button>
-      </td>
-      <td
-        className="px-3 py-2 text-jde-muted text-xs max-w-[150px] truncate"
-        title={deal.notes || ""}
-      >
-        {deal.notes
-          ? deal.notes.length > 30
-            ? deal.notes.slice(0, 30) + "…"
-            : deal.notes
-          : ""}
-      </td>
-    </tr>
   );
 }
