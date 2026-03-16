@@ -2,17 +2,22 @@ import { createClient } from "@/lib/supabase";
 import { calcFiTotal, calcTotalGross } from "@/lib/calculations";
 import type { DealRow, DealInsert, DealUpdate } from "@/types/database";
 
-/** Fetch all deals for an event, ordered by deal date ascending. */
+/** Fetch all deals for an event, ordered by deal number ascending (numeric). */
 export async function getDealsByEvent(eventId: string): Promise<DealRow[]> {
   const supabase = createClient();
   const { data, error } = await supabase
     .from("deals")
     .select("*")
-    .eq("event_id", eventId)
-    .order("deal_date", { ascending: true });
+    .eq("event_id", eventId);
 
   if (error) throw error;
-  return (data ?? []) as DealRow[];
+  const deals = (data ?? []) as DealRow[];
+  deals.sort((a, b) => {
+    const numA = parseInt(a.deal_num ?? "0", 10) || 0;
+    const numB = parseInt(b.deal_num ?? "0", 10) || 0;
+    return numA - numB;
+  });
+  return deals;
 }
 
 /**
