@@ -19,7 +19,7 @@ const sb = createClient(
 
 const FILE = path.resolve(
   __dirname,
-  "../reference/TACOMA_NISSAN_MARCH_26___5_.xlsx"
+  "../reference/TACOMA_NISSAN_MARCH_26___7_.xlsx"
 );
 
 function safeInt(v: unknown): number | null {
@@ -119,18 +119,38 @@ async function main() {
     return null;
   }
 
+  // Sale starts March 9, 2026. Each time day deal# resets to 1 = new day.
+  const SALE_START = new Date("2026-03-09");
   const deals: Record<string, unknown>[] = [];
+  let currentDay = 0;
+  let prevDayDealNum = 0;
+  let totalDealNum = 0;
+
   for (let i = 9; i < dealRows.length; i++) {
     const r = dealRows[i];
     if (!r || r.length === 0) continue;
 
     // col E (index 4) must be a number 1-500
-    const dealNum = safeInt(r[4]);
-    if (dealNum == null || dealNum < 1 || dealNum > 500) continue;
+    const dayDealNum = safeInt(r[4]);
+    if (dayDealNum == null || dayDealNum < 1 || dayDealNum > 500) continue;
+
+    // Detect day boundary: deal# resets (goes to 1 or drops below previous)
+    if (dayDealNum <= prevDayDealNum) {
+      currentDay++;
+    }
+    if (currentDay === 0) currentDay = 1;
+    prevDayDealNum = dayDealNum;
+    totalDealNum++;
+
+    // Calculate deal_date from day offset
+    const dealDate = new Date(SALE_START);
+    dealDate.setDate(dealDate.getDate() + (currentDay - 1));
+    const dateStr = dealDate.toISOString().slice(0, 10); // YYYY-MM-DD
 
     deals.push({
       event_id: EVENT_ID,
-      deal_num: safeStr(r[4]),
+      deal_num: String(totalDealNum),
+      deal_date: dateStr,
       store: safeStr(r[6]),
       customer_name: safeStr(r[8]),
       customer_zip: safeStr(r[9]),
@@ -160,6 +180,7 @@ async function main() {
       notes: safeStr(r[45]),
     });
   }
+  console.log(`  ${currentDay} sale days detected (Mar 9 – Mar ${8 + currentDay})`);
 
   if (deals.length > 0) {
     // Insert in batches of 50
