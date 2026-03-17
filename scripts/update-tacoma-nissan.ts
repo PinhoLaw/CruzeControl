@@ -273,9 +273,11 @@ async function main() {
     const r = mailRows[i];
     if (!r || r.length === 0) continue;
 
-    // col D (index 3) = ZIP must be a number
+    // col D (index 3) = ZIP must be a 5-digit number (skip junk like 0, TOTAL, etc.)
     const zip = safeStr(r[3]);
-    if (!zip || isNaN(Number(zip))) continue;
+    if (!zip || isNaN(Number(zip)) || zip.length < 4) continue;
+    // Skip rows without pieces_sent (summary/junk rows)
+    if (safeInt(r[1]) == null) continue;
 
     mailTracking.push({
       event_id: EVENT_ID,
@@ -290,10 +292,10 @@ async function main() {
       day_5: safeInt(r[9]) ?? 0,
       day_6: safeInt(r[10]) ?? 0,
       day_7: safeInt(r[11]) ?? 0,
-      day_8: 0,
-      day_9: 0,
-      day_10: 0,
-      day_11: 0,
+      day_8: safeInt(r[12]) ?? 0,
+      day_9: safeInt(r[13]) ?? 0,
+      day_10: safeInt(r[14]) ?? 0,
+      day_11: safeInt(r[15]) ?? 0,
     });
   }
 
