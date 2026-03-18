@@ -17,7 +17,7 @@ const sb = createClient(
 
 const FILE = path.resolve(
   __dirname,
-  "../reference/Hawkinson_Nissan_3_JDE_Mission_Control.xlsx"
+  "../reference/Hawkinson_Nissan_JDE_Mission_Control.xlsx"
 );
 
 function safeInt(v: unknown): number | null {
@@ -169,13 +169,18 @@ async function main() {
   const dealSheet = wb.Sheets["DEAL LOG"];
   const dealRows: unknown[][] = XLSX.utils.sheet_to_json(dealSheet, { header: 1, defval: null });
 
+  console.log(`  Total rows in DEAL LOG sheet: ${dealRows.length}`);
   const deals: Record<string, unknown>[] = [];
+  let skipped = 0;
   for (let i = 1; i < dealRows.length; i++) {
     const r = dealRows[i];
     if (!r || r.length === 0) continue;
 
     const dealNum = safeInt(r[0]);
-    if (dealNum == null || dealNum <= 100) continue;
+    if (dealNum == null || dealNum <= 100) {
+      skipped++;
+      continue;
+    }
 
     // Rate: multiply by 100 if < 1 (convert decimal to percentage)
     let rate = safeNum(r[28]);
@@ -187,8 +192,12 @@ async function main() {
     const warranty = safeNum(r[31]) ?? 0;
     const gap = safeNum(r[32]) ?? 0;
     const aft1 = safeNum(r[33]) ?? 0;
-    const fi_total = reserve + warranty + gap + aft1;
     const front_gross = safeNum(r[26]) ?? 0;
+
+    // Use back gross from THINGS NOT IN sheet (authoritative) if available,
+    // otherwise fall back to sum of components
+    const thingsBackGross = backGrossMap[dealNum!];
+    const fi_total = thingsBackGross != null ? thingsBackGross : (reserve + warranty + gap + aft1);
     const total_gross = front_gross + fi_total;
 
     deals.push({
@@ -229,6 +238,7 @@ async function main() {
       if (error) console.error(`  Deal insert error (batch ${i}):`, error.message);
     }
   }
+  console.log(`  Found ${deals.length} deals (skipped ${skipped} non-deal rows)`);
   console.log(`  Inserted ${deals.length} deals`);
 
   // ── Step 5: Insert lenders ────────────────────────────────────────────
