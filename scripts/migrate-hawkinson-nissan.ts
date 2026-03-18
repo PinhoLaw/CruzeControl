@@ -191,13 +191,21 @@ async function main() {
     const reserve = safeNum(r[30]) ?? 0;
     const warranty = safeNum(r[31]) ?? 0;
     const gap = safeNum(r[32]) ?? 0;
-    const aft1 = safeNum(r[33]) ?? 0;
+    let aft1 = safeNum(r[33]) ?? 0;
     const front_gross = safeNum(r[26]) ?? 0;
 
-    // Use back gross from THINGS NOT IN sheet (authoritative) if available,
-    // otherwise fall back to sum of components
+    // The THINGS NOT IN sheet has the authoritative back gross which includes
+    // extra F&I not broken out in the DEAL LOG columns. Store the difference
+    // in aft1 so the DB trigger (fi_total = reserve+warranty+gap+aft1) gets
+    // the correct total.
     const thingsBackGross = backGrossMap[dealNum!];
-    const fi_total = thingsBackGross != null ? thingsBackGross : (reserve + warranty + gap + aft1);
+    if (thingsBackGross != null) {
+      const componentSum = reserve + warranty + gap + aft1;
+      if (thingsBackGross > componentSum) {
+        aft1 = aft1 + (thingsBackGross - componentSum);
+      }
+    }
+    const fi_total = reserve + warranty + gap + aft1;
     const total_gross = front_gross + fi_total;
 
     deals.push({
@@ -285,11 +293,22 @@ async function main() {
     });
   }
 
+  // Add a summary row with event-level daily UPs (no per-ZIP breakdown available)
+  // Daily UPs: Sep 23=121, 24=112, 25=110, 26=138, 28=127, 29=96, 30=131, Oct 1=126, 2=128, 3=136
+  mailTracking.push({
+    event_id: EVENT_ID,
+    zip_code: "ALL",
+    town: "EVENT TOTAL",
+    pieces_sent: 101608,
+    day_1: 121, day_2: 112, day_3: 110, day_4: 138, day_5: 127,
+    day_6: 96, day_7: 131, day_8: 126, day_9: 128, day_10: 136, day_11: 0,
+  });
+
   if (mailTracking.length > 0) {
     const { error } = await sb.from("mail_tracking").insert(mailTracking);
     if (error) console.error("  Mail tracking insert error:", error.message);
   }
-  console.log(`  Inserted ${mailTracking.length} mail tracking rows`);
+  console.log(`  Inserted ${mailTracking.length} mail tracking rows (${mailTracking.length - 1} ZIPs + 1 summary)`);
 
   // ── Summary ───────────────────────────────────────────────────────────
   const totalFront = deals.reduce((s, d) => s + (Number(d.front_gross) || 0), 0);
