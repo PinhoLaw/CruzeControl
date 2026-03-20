@@ -12,6 +12,7 @@ import MailTrackingTable from "@/components/mail-tracking/MailTrackingTable";
 import PerformanceTable from "@/components/performance/PerformanceTable";
 import InventoryTable from "@/components/inventory/InventoryTable";
 import EventKPIPanel from "@/components/kpi/EventKPIPanel";
+import FeedbackWidget from "@/components/FeedbackWidget";
 
 interface Event {
   id: string;
@@ -346,6 +347,7 @@ export default function EventDashboard() {
           )}
         </div>
       </div>
+      <FeedbackWidget eventId={eventId} currentPage={activeTab} />
     </div>
   );
 }
