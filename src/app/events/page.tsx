@@ -185,12 +185,20 @@ export default function EventsPage() {
       <div className="max-w-7xl mx-auto px-6 py-8">
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-lg font-semibold text-jde-text">Events</h2>
-          <Link
-            href="/events/new"
-            className="px-4 py-2 rounded-lg border border-jde-cyan text-jde-cyan text-sm font-medium hover:bg-jde-cyan/10 hover:scale-[1.02] active:scale-[0.98] transition-all duration-200"
-          >
-            + New Event
-          </Link>
+          <div className="flex items-center gap-3">
+            <Link
+              href="/feedback"
+              className="px-3 py-2 rounded-lg border border-jde-border text-jde-muted text-sm hover:text-jde-cyan hover:border-jde-cyan/30 transition-all duration-200"
+            >
+              📋 Feedback
+            </Link>
+            <Link
+              href="/events/new"
+              className="px-4 py-2 rounded-lg border border-jde-cyan text-jde-cyan text-sm font-medium hover:bg-jde-cyan/10 hover:scale-[1.02] active:scale-[0.98] transition-all duration-200"
+            >
+              + New Event
+            </Link>
+          </div>
         </div>
 
         {loading ? (
