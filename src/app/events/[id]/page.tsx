@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useParams, useSearchParams } from "next/navigation";
+import { useParams, useSearchParams, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase";
 import Link from "next/link";
 import DealLogContainer from "@/components/deal-log/DealLogContainer";
@@ -43,6 +43,7 @@ const TABS = [
   "Mail Tracking",
   "Recap",
   "Performance",
+  "Settings",
 ] as const;
 
 type Tab = (typeof TABS)[number];
@@ -55,6 +56,7 @@ const TAB_ICONS: Record<Tab, string> = {
   "Mail Tracking": "\uD83D\uDCEC",
   Recap: "\uD83D\uDCCA",
   Performance: "\uD83C\uDFC6",
+  Settings: "⚙",
 };
 
 function getInitialTab(param: string | null): Tab {
@@ -68,6 +70,7 @@ function getInitialTab(param: string | null): Tab {
 export default function EventDashboard() {
   const params = useParams();
   const searchParams = useSearchParams();
+  const router = useRouter();
   const eventId = params.id as string;
   const [event, setEvent] = useState<Event | null>(null);
   const [stats, setStats] = useState<DealSummary>({
@@ -291,7 +294,13 @@ export default function EventDashboard() {
             {TABS.map((tab) => (
               <button
                 key={tab}
-                onClick={() => setActiveTab(tab)}
+                onClick={() => {
+                  if (tab === "Settings") {
+                    router.push(`/events/${eventId}/settings`);
+                    return;
+                  }
+                  setActiveTab(tab);
+                }}
                 className={`px-3 md:px-5 py-2 md:py-2.5 text-[11px] md:text-[13px] rounded-t transition-all duration-200 whitespace-nowrap ${
                   activeTab === tab
                     ? "bg-jde-bg text-jde-cyan border border-jde-border border-b-jde-bg font-semibold shadow-glow-cyan"
