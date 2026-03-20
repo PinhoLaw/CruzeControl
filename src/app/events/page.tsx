@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase";
 import Link from "next/link";
+import FeedbackWidget from "@/components/FeedbackWidget";
 
 interface EventRow {
   id: string;
@@ -292,6 +293,7 @@ export default function EventsPage() {
           </div>
         )}
       </div>
+      <FeedbackWidget currentPage="Events List" />
     </div>
   );
 }
