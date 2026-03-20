@@ -67,9 +67,9 @@ export default function EventsPage() {
         upsMap[m.event_id] = (upsMap[m.event_id] || 0) + ups;
       });
 
-      // Compute aggregate stats
+      // Compute aggregate stats (completed events only)
       let totalDeals = 0, totalGross = 0, totalUps = 0, totalDays = 0;
-      eventsData.forEach((e) => {
+      eventsData.filter((e) => e.status === "completed").forEach((e) => {
         totalDeals += countMap[e.id] || 0;
         totalGross += grossMap[e.id] || 0;
         totalUps += upsMap[e.id] || 0;
