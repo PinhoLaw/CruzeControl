@@ -24,6 +24,7 @@ interface EventData {
   end_date: string | null;
   marketing_cost: number;
   mail_quantity: number | null;
+  franchise: string | null;
 }
 
 export default function EventKPIPanel({ eventId }: Props) {
@@ -42,7 +43,7 @@ export default function EventKPIPanel({ eventId }: Props) {
       supabase.from("salespeople").select("*").eq("event_id", eventId),
       supabase.from("inventory").select("*").eq("event_id", eventId),
       supabase.from("mail_tracking").select("*").eq("event_id", eventId),
-      supabase.from("events").select("start_date,end_date,marketing_cost,mail_quantity").eq("id", eventId).single(),
+      supabase.from("events").select("start_date,end_date,marketing_cost,mail_quantity,franchise").eq("id", eventId).single(),
     ]);
     setDeals((dRes.data || []) as DealRow[]);
     setSalespeople((spRes.data || []) as SalespersonRow[]);
@@ -75,6 +76,12 @@ export default function EventKPIPanel({ eventId }: Props) {
       <GeographicPanel deals={deals} mailRows={mailRows} />
       <ProductMixPanel deals={deals} />
       <SalespersonEfficiencyPanel deals={deals} salespeople={salespeople} saleDays={saleDays()} />
+      <MailDecayPanel mailRows={mailRows} />
+      <SplitTaxPanel deals={deals} />
+      <TradeUpgradePanel deals={deals} />
+      <NegativeEquityPanel deals={deals} />
+      <FranchiseLoyaltyPanel deals={deals} franchise={event?.franchise || null} />
+      <ZipROIPanel deals={deals} mailRows={mailRows} />
     </div>
   );
 }
@@ -471,6 +478,347 @@ function SalespersonEfficiencyPanel({ deals, salespeople, saleDays }: { deals: D
       <KPIRow label="Gross / Rep / Day" value={grossPerRepPerDay} color="text-jde-success" />
       <KPIRow label="Split Deal Rate" value={`${splitDeals} (${splitRate}%)`} color="text-jde-purple" />
       <KPIRow label="Most Consistent Rep" value={mostConsistent.name !== "—" ? `${mostConsistent.name} (σ ${mostConsistent.stdDev.toFixed(1)})` : "—"} color="text-jde-cyan" />
+    </Panel>
+  );
+}
+
+/* ── Panel 7: Mail Decay Half-Life ─────────────────────────────────────── */
+
+function MailDecayPanel({ mailRows }: { mailRows: MailRow[] }) {
+  // Calculate total UPs per day across all ZIPs
+  const dayTotals: number[] = [];
+  for (let d = 1; d <= 11; d++) {
+    const key = `day_${d}` as keyof MailRow;
+    const total = mailRows.reduce((s, r) => s + (Number(r[key]) || 0), 0);
+    dayTotals.push(total);
+  }
+
+  const grandTotal = dayTotals.reduce((s, v) => s + v, 0);
+
+  // Find half-life: day when cumulative UPs reach 50%
+  let cumulative = 0;
+  let halfLifeDay = 0;
+  const halfTarget = grandTotal / 2;
+  for (let i = 0; i < dayTotals.length; i++) {
+    cumulative += dayTotals[i];
+    if (cumulative >= halfTarget && halfLifeDay === 0) {
+      halfLifeDay = i + 1;
+    }
+  }
+
+  // Decay rate: day 1 to day 2 drop
+  const day1to2Drop = dayTotals[0] > 0 && dayTotals[1] > 0
+    ? Math.round(((dayTotals[0] - dayTotals[1]) / dayTotals[0]) * 100)
+    : 0;
+
+  // Peak day
+  const peakDay = dayTotals.indexOf(Math.max(...dayTotals)) + 1;
+  const peakUps = Math.max(...dayTotals);
+
+  // Days with meaningful traffic (> 10% of peak)
+  const activeDays = dayTotals.filter(d => d > peakUps * 0.1).length;
+
+  return (
+    <Panel>
+      <PanelHeader title="Mail Decay Half-Life" color="bg-jde-danger" />
+      {grandTotal === 0 ? (
+        <p className="text-jde-muted text-sm py-4 text-center">No UP data available</p>
+      ) : (
+        <>
+          <KPIRow label="Half-Life" value={`Day ${halfLifeDay}`} color={halfLifeDay <= 2 ? "text-jde-danger" : halfLifeDay <= 4 ? "text-jde-warning" : "text-jde-success"} />
+          <KPIRow label="Peak Day" value={`Day ${peakDay} (${peakUps} UPs)`} color="text-jde-cyan" />
+          <KPIRow label="Day 1→2 Drop" value={`${day1to2Drop}%`} color={day1to2Drop > 50 ? "text-jde-danger" : "text-jde-warning"} />
+          <KPIRow label="Active Days (>10% of peak)" value={String(activeDays)} color="text-jde-success" />
+          <div className="text-[10px] uppercase tracking-wider text-jde-muted mt-3 mb-1">Daily UP Breakdown</div>
+          <div className="flex items-end gap-1 h-16 mt-1">
+            {dayTotals.map((v, i) => {
+              const height = peakUps > 0 ? (v / peakUps) * 100 : 0;
+              return (
+                <div key={i} className="flex-1 flex flex-col items-center gap-0.5">
+                  <div
+                    className="w-full bg-jde-cyan/60 rounded-t transition-all"
+                    style={{ height: `${Math.max(height, 2)}%` }}
+                    title={`Day ${i + 1}: ${v} UPs`}
+                  />
+                  <span className="text-[8px] text-jde-muted">{i + 1}</span>
+                </div>
+              );
+            })}
+          </div>
+        </>
+      )}
+    </Panel>
+  );
+}
+
+/* ── Panel 8: Split Tax ────────────────────────────────────────────────── */
+
+function SplitTaxPanel({ deals }: { deals: DealRow[] }) {
+  const solo = deals.filter(d => !d.salesperson2_id || d.salesperson2_id === d.salesperson_id);
+  const split = deals.filter(d => d.salesperson2_id && d.salesperson2_id !== d.salesperson_id);
+
+  const soloAvgGross = solo.length > 0 ? solo.reduce((s, d) => s + (d.total_gross || 0), 0) / solo.length : 0;
+  const splitAvgGross = split.length > 0 ? split.reduce((s, d) => s + (d.total_gross || 0), 0) / split.length : 0;
+  const soloAvgFront = solo.length > 0 ? solo.reduce((s, d) => s + (d.front_gross || 0), 0) / solo.length : 0;
+  const splitAvgFront = split.length > 0 ? split.reduce((s, d) => s + (d.front_gross || 0), 0) / split.length : 0;
+
+  const taxAmount = soloAvgGross - splitAvgGross;
+  const taxPct = soloAvgGross > 0 ? Math.round((taxAmount / soloAvgGross) * 100) : 0;
+
+  // F&I comparison
+  const soloAvgFi = solo.length > 0 ? solo.reduce((s, d) => s + (d.fi_total || 0), 0) / solo.length : 0;
+  const splitAvgFi = split.length > 0 ? split.reduce((s, d) => s + (d.fi_total || 0), 0) / split.length : 0;
+
+  return (
+    <Panel>
+      <PanelHeader title="Split Tax" color="bg-jde-warning" />
+      <KPIRow label="Solo Deals" value={String(solo.length)} color="text-jde-text" />
+      <KPIRow label="Split Deals" value={String(split.length)} color="text-jde-text" />
+      <KPIRow label="Solo Avg Gross" value={formatCurrency(soloAvgGross)} color="text-jde-success" />
+      <KPIRow label="Split Avg Gross" value={formatCurrency(splitAvgGross)} color="text-jde-warning" />
+      <KPIRow
+        label="Split Tax (gap)"
+        value={`${taxAmount >= 0 ? "-" : "+"}${formatCurrency(Math.abs(taxAmount))} (${Math.abs(taxPct)}%)`}
+        color={taxAmount > 0 ? "text-jde-danger" : "text-jde-success"}
+      />
+      <KPIRow label="Solo Avg Front" value={formatCurrency(soloAvgFront)} color="text-jde-muted" />
+      <KPIRow label="Split Avg Front" value={formatCurrency(splitAvgFront)} color="text-jde-muted" />
+      <KPIRow label="Solo Avg F&I" value={formatCurrency(soloAvgFi)} color="text-jde-muted" />
+      <KPIRow label="Split Avg F&I" value={formatCurrency(splitAvgFi)} color="text-jde-muted" />
+    </Panel>
+  );
+}
+
+/* ── Panel 9: Trade Upgrade Index ──────────────────────────────────────── */
+
+function TradeUpgradePanel({ deals }: { deals: DealRow[] }) {
+  const withBoth = deals.filter(d => d.year && d.trade_year && Number(d.trade_year) > 1990);
+
+  const upgrades = withBoth.map(d => ({
+    purchaseYear: d.year!,
+    tradeYear: Number(d.trade_year),
+    gap: d.year! - Number(d.trade_year),
+    tradeMake: d.trade_make?.trim().toUpperCase() || "Unknown",
+    purchaseMake: d.make?.trim().toUpperCase() || "Unknown",
+  }));
+
+  const avgGap = upgrades.length > 0 ? upgrades.reduce((s, u) => s + u.gap, 0) / upgrades.length : 0;
+
+  // Distribution
+  const small = upgrades.filter(u => u.gap <= 3).length; // 0-3 years
+  const medium = upgrades.filter(u => u.gap > 3 && u.gap <= 7).length; // 4-7 years
+  const large = upgrades.filter(u => u.gap > 7).length; // 8+ years
+
+  // Avg trade year and purchase year
+  const avgTradeYear = upgrades.length > 0 ? Math.round(upgrades.reduce((s, u) => s + u.tradeYear, 0) / upgrades.length) : 0;
+  const avgPurchaseYear = upgrades.length > 0 ? Math.round(upgrades.reduce((s, u) => s + u.purchaseYear, 0) / upgrades.length) : 0;
+
+  // New vs used upgrade gap
+  const newDeals = withBoth.filter(d => d.new_used === "New");
+  const usedDeals = withBoth.filter(d => d.new_used === "Used");
+  const newAvgGap = newDeals.length > 0 ? newDeals.reduce((s, d) => s + (d.year! - Number(d.trade_year)), 0) / newDeals.length : 0;
+  const usedAvgGap = usedDeals.length > 0 ? usedDeals.reduce((s, d) => s + (d.year! - Number(d.trade_year)), 0) / usedDeals.length : 0;
+
+  return (
+    <Panel>
+      <PanelHeader title="Trade Upgrade Index" color="bg-sky-400" />
+      {upgrades.length === 0 ? (
+        <p className="text-jde-muted text-sm py-4 text-center">No trade data available</p>
+      ) : (
+        <>
+          <KPIRow label="Avg Upgrade Gap" value={`${avgGap.toFixed(1)} years`} color="text-jde-cyan" />
+          <KPIRow label="Avg Trade Year" value={String(avgTradeYear)} color="text-jde-muted" />
+          <KPIRow label="Avg Purchase Year" value={String(avgPurchaseYear)} color="text-jde-success" />
+          <KPIRow label="New Purchase Gap" value={newAvgGap > 0 ? `${newAvgGap.toFixed(1)} years` : "—"} color="text-jde-cyan" />
+          <KPIRow label="Used Purchase Gap" value={usedAvgGap > 0 ? `${usedAvgGap.toFixed(1)} years` : "—"} color="text-jde-warning" />
+          <div className="text-[10px] uppercase tracking-wider text-jde-muted mt-3 mb-1">Upgrade Distribution</div>
+          <KPIRow label="≤3 years (lateral move)" value={`${small} (${upgrades.length > 0 ? Math.round((small / upgrades.length) * 100) : 0}%)`} color="text-jde-muted" />
+          <KPIRow label="4-7 years (moderate)" value={`${medium} (${upgrades.length > 0 ? Math.round((medium / upgrades.length) * 100) : 0}%)`} color="text-jde-warning" />
+          <KPIRow label="8+ years (big jump)" value={`${large} (${upgrades.length > 0 ? Math.round((large / upgrades.length) * 100) : 0}%)`} color="text-jde-success" />
+        </>
+      )}
+    </Panel>
+  );
+}
+
+/* ── Panel 10: Negative Equity Rescue Rate ─────────────────────────────── */
+
+function NegativeEquityPanel({ deals }: { deals: DealRow[] }) {
+  const withTrade = deals.filter(d => d.acv != null && d.acv > 0 && d.payoff != null);
+  const negEquity = withTrade.filter(d => (d.payoff || 0) > (d.acv || 0));
+  const negFunded = negEquity.filter(d => d.funded === true || (d.lender && d.lender.trim() !== ""));
+  const rescueRate = negEquity.length > 0 ? Math.round((negFunded.length / negEquity.length) * 100) : 0;
+
+  // Avg negative equity amount
+  const avgNegAmount = negEquity.length > 0
+    ? negEquity.reduce((s, d) => s + ((d.payoff || 0) - (d.acv || 0)), 0) / negEquity.length
+    : 0;
+
+  // Worst case (deepest underwater)
+  let worstDeal = { name: "—", amount: 0 };
+  negEquity.forEach(d => {
+    const gap = (d.payoff || 0) - (d.acv || 0);
+    if (gap > worstDeal.amount) worstDeal = { name: d.customer_name || "Unknown", amount: gap };
+  });
+
+  // Positive equity stats for comparison
+  const posEquity = withTrade.filter(d => (d.acv || 0) >= (d.payoff || 0));
+  const avgPosAmount = posEquity.length > 0
+    ? posEquity.reduce((s, d) => s + ((d.acv || 0) - (d.payoff || 0)), 0) / posEquity.length
+    : 0;
+
+  return (
+    <Panel>
+      <PanelHeader title="Negative Equity Rescue Rate" color="bg-jde-danger" />
+      {withTrade.length === 0 ? (
+        <p className="text-jde-muted text-sm py-4 text-center">No trade/payoff data available</p>
+      ) : (
+        <>
+          <KPIRow label="Negative Equity Deals" value={`${negEquity.length} / ${withTrade.length} (${withTrade.length > 0 ? Math.round((negEquity.length / withTrade.length) * 100) : 0}%)`} color="text-jde-danger" />
+          <KPIRow label="Rescue Rate (funded)" value={`${negFunded.length} / ${negEquity.length} (${rescueRate}%)`} color={rescueRate >= 70 ? "text-jde-success" : rescueRate >= 50 ? "text-jde-warning" : "text-jde-danger"} />
+          <KPIRow label="Avg Underwater Amount" value={avgNegAmount > 0 ? `-${formatCurrency(avgNegAmount)}` : "—"} color="text-jde-danger" />
+          <KPIRow label="Deepest Underwater" value={worstDeal.amount > 0 ? `${worstDeal.name} (-${formatCurrency(worstDeal.amount)})` : "—"} color="text-jde-danger" />
+          <KPIRow label="Positive Equity Deals" value={String(posEquity.length)} color="text-jde-success" />
+          <KPIRow label="Avg Positive Equity" value={avgPosAmount > 0 ? formatCurrency(avgPosAmount) : "—"} color="text-jde-success" />
+        </>
+      )}
+    </Panel>
+  );
+}
+
+/* ── Panel 11: Franchise Loyalty Rate ──────────────────────────────────── */
+
+function FranchiseLoyaltyPanel({ deals, franchise }: { deals: DealRow[]; franchise: string | null }) {
+  const withTrade = deals.filter(d => d.trade_make && d.trade_make.trim() !== "");
+  const franchiseUpper = franchise?.toUpperCase().trim() || "";
+
+  // Loyalty: trade_make matches franchise
+  const loyal = withTrade.filter(d => {
+    const tradeMake = d.trade_make?.trim().toUpperCase() || "";
+    return tradeMake === franchiseUpper || tradeMake.includes(franchiseUpper) || franchiseUpper.includes(tradeMake);
+  });
+  const conquest = withTrade.filter(d => {
+    const tradeMake = d.trade_make?.trim().toUpperCase() || "";
+    return tradeMake !== franchiseUpper && !tradeMake.includes(franchiseUpper) && !franchiseUpper.includes(tradeMake);
+  });
+
+  const loyaltyRate = withTrade.length > 0 ? Math.round((loyal.length / withTrade.length) * 100) : 0;
+
+  // Top conquest brands
+  const conquestBrands = new Map<string, number>();
+  conquest.forEach(d => {
+    const make = d.trade_make?.trim().toUpperCase() || "";
+    if (make) conquestBrands.set(make, (conquestBrands.get(make) || 0) + 1);
+  });
+  const topConquests = Array.from(conquestBrands.entries()).sort((a, b) => b[1] - a[1]).slice(0, 5);
+
+  // Avg gross: loyal vs conquest
+  const loyalAvgGross = loyal.length > 0 ? loyal.reduce((s, d) => s + (d.total_gross || 0), 0) / loyal.length : 0;
+  const conquestAvgGross = conquest.length > 0 ? conquest.reduce((s, d) => s + (d.total_gross || 0), 0) / conquest.length : 0;
+
+  return (
+    <Panel>
+      <PanelHeader title={`Franchise Loyalty${franchiseUpper ? ` (${franchiseUpper})` : ""}`} color="bg-jde-success" />
+      {withTrade.length === 0 || !franchiseUpper ? (
+        <p className="text-jde-muted text-sm py-4 text-center">{!franchiseUpper ? "No franchise set for this event" : "No trade data available"}</p>
+      ) : (
+        <>
+          <KPIRow label="Loyalty Rate" value={`${loyal.length} / ${withTrade.length} (${loyaltyRate}%)`} color={loyaltyRate > 40 ? "text-jde-success" : "text-jde-warning"} />
+          <KPIRow label="Conquest Rate" value={`${conquest.length} (${100 - loyaltyRate}%)`} color="text-jde-cyan" />
+          <KPIRow label="Loyal Avg Gross" value={formatCurrency(loyalAvgGross)} color="text-jde-success" />
+          <KPIRow label="Conquest Avg Gross" value={formatCurrency(conquestAvgGross)} color="text-jde-cyan" />
+          {topConquests.length > 0 && (
+            <>
+              <div className="text-[10px] uppercase tracking-wider text-jde-muted mt-3 mb-1">Top Conquest Brands</div>
+              {topConquests.map(([make, count]) => (
+                <KPIRow key={make} label={make} value={`${count} trade${count !== 1 ? "s" : ""}`} color="text-jde-warning" />
+              ))}
+            </>
+          )}
+        </>
+      )}
+    </Panel>
+  );
+}
+
+/* ── Panel 12: ZIP ROI ─────────────────────────────────────────────────── */
+
+function ZipROIPanel({ deals, mailRows }: { deals: DealRow[]; mailRows: MailRow[] }) {
+  // Build mail ZIP data
+  const mailZips = new Map<string, { town: string; pieces: number; ups: number }>();
+  mailRows.forEach(r => {
+    const ups = r.day_1 + r.day_2 + r.day_3 + r.day_4 + r.day_5 + r.day_6 + r.day_7 + r.day_8 + r.day_9 + r.day_10 + r.day_11;
+    mailZips.set(r.zip_code, {
+      town: r.town || r.zip_code,
+      pieces: r.pieces_sent || 0,
+      ups,
+    });
+  });
+
+  // Count deals per customer ZIP
+  const dealsByZip = new Map<string, number>();
+  deals.forEach(d => {
+    const zip = d.customer_zip?.trim();
+    if (zip) dealsByZip.set(zip, (dealsByZip.get(zip) || 0) + 1);
+  });
+
+  // Build ZIP ROI table: for mailed ZIPs, show pieces → UPs → deals → conversion
+  const zipROI: { zip: string; town: string; pieces: number; ups: number; deals: number; convRate: number }[] = [];
+  mailZips.forEach((data, zip) => {
+    const zipDeals = dealsByZip.get(zip) || 0;
+    const convRate = data.ups > 0 ? (zipDeals / data.ups) * 100 : 0;
+    zipROI.push({ zip, town: data.town, pieces: data.pieces, ups: data.ups, deals: zipDeals, convRate });
+  });
+
+  // Sort by conversion rate (best first), then by deals
+  const sorted = zipROI.filter(z => z.ups > 0).sort((a, b) => b.convRate - a.convRate);
+  const bestZips = sorted.slice(0, 3);
+  const worstZips = sorted.filter(z => z.deals === 0);
+
+  // Overall: deals from mailed vs non-mailed
+  const mailedZipSet = new Set(mailZips.keys());
+  let mailedDeals = 0, nonMailedDeals = 0;
+  deals.forEach(d => {
+    const zip = d.customer_zip?.trim();
+    if (!zip) return;
+    if (mailedZipSet.has(zip)) mailedDeals++;
+    else nonMailedDeals++;
+  });
+
+  return (
+    <Panel>
+      <PanelHeader title="Mailer ZIP ROI" color="bg-jde-cyan" />
+      {mailZips.size === 0 ? (
+        <p className="text-jde-muted text-sm py-4 text-center">No mail tracking data</p>
+      ) : (
+        <>
+          <KPIRow label="Mailed ZIPs" value={String(mailZips.size)} color="text-jde-text" />
+          <KPIRow label="Deals from Mailed ZIPs" value={`${mailedDeals} (${deals.length > 0 ? Math.round((mailedDeals / deals.length) * 100) : 0}%)`} color="text-jde-success" />
+          <KPIRow label="Deals from Non-Mailed" value={`${nonMailedDeals} (${deals.length > 0 ? Math.round((nonMailedDeals / deals.length) * 100) : 0}%)`} color="text-jde-warning" />
+          <KPIRow label="Dead ZIPs (0 deals)" value={`${worstZips.length} / ${mailZips.size}`} color={worstZips.length > mailZips.size / 2 ? "text-jde-danger" : "text-jde-muted"} />
+          {bestZips.length > 0 && (
+            <>
+              <div className="text-[10px] uppercase tracking-wider text-jde-muted mt-3 mb-1">Best Converting ZIPs</div>
+              {bestZips.map(z => (
+                <div key={z.zip} className="flex justify-between items-baseline py-1.5 border-b border-jde-border/30 last:border-0">
+                  <span className="text-sm text-jde-muted">{z.zip} <span className="text-[10px]">({z.town})</span></span>
+                  <span className="font-mono text-sm text-jde-success whitespace-nowrap">
+                    {z.deals}d / {z.ups}u = {z.convRate.toFixed(1)}%
+                  </span>
+                </div>
+              ))}
+            </>
+          )}
+          {worstZips.length > 0 && worstZips.length <= 5 && (
+            <>
+              <div className="text-[10px] uppercase tracking-wider text-jde-muted mt-3 mb-1">Dead ZIPs (UPs but 0 deals)</div>
+              {worstZips.map(z => (
+                <KPIRow key={z.zip} label={`${z.zip} (${z.town})`} value={`${z.ups} UPs, 0 deals`} color="text-jde-danger" />
+              ))}
+            </>
+          )}
+        </>
+      )}
     </Panel>
   );
 }
