@@ -37,6 +37,18 @@ export default function InventoryTable({ eventId }: Props) {
   const [loading, setLoading] = useState(true);
   const [flash, setFlash] = useState<{ type: "success" | "error"; msg: string } | null>(null);
   const [locationFilter, setLocationFilter] = useState("all");
+  const [sortKey, setSortKey] = useState<string | null>(null);
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+  const [kbbMode, setKbbMode] = useState<"trade" | "retail">("trade");
+
+  function toggleSort(key: string) {
+    if (sortKey === key) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortKey(key);
+      setSortDir("asc");
+    }
+  }
 
   const showFlash = useCallback((type: "success" | "error", msg: string) => {
     setFlash({ type, msg });
@@ -63,10 +75,43 @@ export default function InventoryTable({ eventId }: Props) {
     new Set(items.map((i) => i.location).filter(Boolean))
   ).sort() as string[];
 
-  const filtered =
+  const locationFiltered =
     locationFilter === "all"
       ? items
       : items.filter((i) => i.location === locationFilter);
+
+  // Computed value getter for sorting
+  function getSortValue(item: InventoryRow, key: string): number | string | null {
+    const kbbVal = kbbMode === "trade" ? item.kbb_trade : item.kbb_retail;
+    if (key === "diff") return (kbbVal ?? 0) - (item.cost ?? 0);
+    if (key === "pct115") return kbbVal != null ? Math.round(kbbVal * 1.15) : null;
+    if (key === "pct115diff") return kbbVal != null && item.cost != null ? Math.round(kbbVal * 1.15) - item.cost : null;
+    if (key === "pct125") return kbbVal != null ? Math.round(kbbVal * 1.25) : null;
+    if (key === "pct125diff") return kbbVal != null && item.cost != null ? Math.round(kbbVal * 1.25) - item.cost : null;
+    if (key === "pct140") return kbbVal != null ? Math.round(kbbVal * 1.40) : null;
+    if (key === "pct140diff") return kbbVal != null && item.cost != null ? Math.round(kbbVal * 1.40) - item.cost : null;
+    const val = item[key as keyof InventoryRow];
+    // For text fields that may contain numbers (hat_num, stock_num), parse numerically
+    if (typeof val === "string" && val.length > 0) {
+      const num = parseFloat(val);
+      if (!isNaN(num)) return num;
+    }
+    return val as number | string | null;
+  }
+
+  const filtered = sortKey
+    ? [...locationFiltered].sort((a, b) => {
+        const av = getSortValue(a, sortKey);
+        const bv = getSortValue(b, sortKey);
+        if (av == null && bv == null) return 0;
+        if (av == null) return 1;
+        if (bv == null) return -1;
+        const cmp = typeof av === "string" && typeof bv === "string"
+          ? av.localeCompare(bv)
+          : Number(av) - Number(bv);
+        return sortDir === "asc" ? cmp : -cmp;
+      })
+    : locationFiltered;
 
   async function handleAddVehicle() {
     try {
@@ -180,6 +225,16 @@ export default function InventoryTable({ eventId }: Props) {
               </option>
             ))}
           </select>
+          <button
+            onClick={() => setKbbMode((m) => (m === "trade" ? "retail" : "trade"))}
+            className={`px-3 py-1.5 rounded-lg border text-sm font-medium transition-all duration-200 ${
+              kbbMode === "trade"
+                ? "border-jde-success text-jde-success hover:bg-jde-success/10"
+                : "border-jde-purple text-jde-purple hover:bg-jde-purple/10"
+            }`}
+          >
+            {kbbMode === "trade" ? "KBB Trade ⇄" : "KBB Retail ⇄"}
+          </button>
           <span className="text-sm text-jde-muted">
             Showing <span className="font-mono text-jde-cyan">{filtered.length}</span> of{" "}
             <span className="font-mono text-jde-cyan">{totalUnits}</span>
@@ -201,14 +256,41 @@ export default function InventoryTable({ eventId }: Props) {
               {COLUMNS.map((col) => (
                 <th
                   key={col.key}
-                  className={`px-2 py-2 ${col.align === "right" ? "text-right" : "text-left"}`}
+                  className={`px-2 py-2 cursor-pointer hover:text-white select-none ${col.align === "right" ? "text-right" : "text-left"}`}
+                  onClick={() => toggleSort(col.key)}
                 >
-                  {col.label}
+                  {col.label}{sortKey === col.key ? (sortDir === "asc" ? " ▲" : " ▼") : ""}
                 </th>
               ))}
-              <th className="px-2 py-2 text-right">Diff</th>
-              <th className="px-2 py-2 text-left">Location</th>
-              <th className="px-2 py-2 text-left">Notes</th>
+              {[
+                { key: "diff", label: kbbMode === "trade" ? "Trade Diff" : "Retail Diff", align: "right" },
+                { key: "pct115", label: "115%", align: "right" },
+                { key: "pct115diff", label: "115% Diff", align: "right" },
+                { key: "pct125", label: "125%", align: "right" },
+                { key: "pct125diff", label: "125% Diff", align: "right" },
+                { key: "pct140", label: "140%", align: "right" },
+                { key: "pct140diff", label: "140% Diff", align: "right" },
+              ].map((col) => (
+                <th
+                  key={col.key}
+                  className={`px-2 py-2 cursor-pointer hover:text-white select-none ${col.align === "right" ? "text-right" : "text-left"}`}
+                  onClick={() => toggleSort(col.key)}
+                >
+                  {col.label}{sortKey === col.key ? (sortDir === "asc" ? " ▲" : " ▼") : ""}
+                </th>
+              ))}
+              <th
+                className="px-2 py-2 cursor-pointer hover:text-white select-none text-left"
+                onClick={() => toggleSort("location")}
+              >
+                Location{sortKey === "location" ? (sortDir === "asc" ? " ▲" : " ▼") : ""}
+              </th>
+              <th
+                className="px-2 py-2 cursor-pointer hover:text-white select-none text-left"
+                onClick={() => toggleSort("notes")}
+              >
+                Notes{sortKey === "notes" ? (sortDir === "asc" ? " ▲" : " ▼") : ""}
+              </th>
               <th className="px-2 py-2 text-center w-12"></th>
             </tr>
           </thead>
@@ -218,6 +300,7 @@ export default function InventoryTable({ eventId }: Props) {
                 key={item.id}
                 item={item}
                 idx={idx}
+                kbbMode={kbbMode}
                 onFieldSave={handleFieldSave}
                 onDelete={handleDelete}
               />
@@ -225,7 +308,7 @@ export default function InventoryTable({ eventId }: Props) {
             {filtered.length === 0 && (
               <tr>
                 <td
-                  colSpan={COLUMNS.length + 4}
+                  colSpan={COLUMNS.length + 10}
                   className="text-center py-8 text-jde-muted"
                 >
                   {items.length === 0
@@ -255,18 +338,32 @@ export default function InventoryTable({ eventId }: Props) {
 function InventoryRow({
   item,
   idx,
+  kbbMode,
   onFieldSave,
   onDelete,
 }: {
   item: InventoryRow;
   idx: number;
+  kbbMode: "trade" | "retail";
   onFieldSave: (item: InventoryRow, field: EditableField, value: string) => void;
   onDelete: (id: string) => void;
 }) {
-  const diff = (item.kbb_trade ?? 0) - (item.cost ?? 0);
+  const kbbVal = kbbMode === "trade" ? item.kbb_trade : item.kbb_retail;
+  const diff = (kbbVal ?? 0) - (item.cost ?? 0);
   const diffColor =
     diff > 0 ? "text-jde-success" : diff < 0 ? "text-jde-danger" : "text-jde-muted";
   const rowBg = idx % 2 === 0 ? "bg-jde-surface" : "bg-jde-bg";
+
+  function pctDiffCell(multiplier: number) {
+    const pctVal = kbbVal != null ? Math.round(kbbVal * multiplier) : null;
+    const d = pctVal != null && item.cost != null ? pctVal - item.cost : null;
+    const c = d != null ? (d > 0 ? "text-jde-success" : d < 0 ? "text-jde-danger" : "text-jde-muted") : "text-jde-muted";
+    return (
+      <td className={`px-2 py-1 text-right font-mono text-sm ${c}`}>
+        {d != null ? formatCurrency(d) : "—"}
+      </td>
+    );
+  }
 
   return (
     <tr className={`${rowBg} hover:bg-jde-panel/50 transition-colors`}>
@@ -284,10 +381,23 @@ function InventoryRow({
       ))}
       {/* Diff (computed) */}
       <td className={`px-2 py-1 text-right font-mono text-sm ${diffColor}`}>
-        {item.kbb_trade != null && item.cost != null
-          ? formatCurrency(diff)
-          : "—"}
+        {kbbVal != null && item.cost != null ? formatCurrency(diff) : "—"}
       </td>
+      {/* 115% */}
+      <td className="px-2 py-1 text-right font-mono text-sm text-jde-warning">
+        {kbbVal != null && kbbVal > 0 ? formatCurrency(Math.round(kbbVal * 1.15)) : "—"}
+      </td>
+      {pctDiffCell(1.15)}
+      {/* 125% */}
+      <td className="px-2 py-1 text-right font-mono text-sm text-jde-purple">
+        {kbbVal != null && kbbVal > 0 ? formatCurrency(Math.round(kbbVal * 1.25)) : "—"}
+      </td>
+      {pctDiffCell(1.25)}
+      {/* 140% */}
+      <td className="px-2 py-1 text-right font-mono text-sm text-jde-cyan">
+        {kbbVal != null && kbbVal > 0 ? formatCurrency(Math.round(kbbVal * 1.40)) : "—"}
+      </td>
+      {pctDiffCell(1.40)}
       {/* Location */}
       <td className="px-1 py-1">
         <InlineCell

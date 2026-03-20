@@ -395,6 +395,214 @@ export default function PerformanceTable({
           Split deals count as 0.5 units each.
         </p>
       </div>
+
+      {/* Closer Leaderboard */}
+      <CloserLeaderboard deals={deals} salespeople={salespeople} />
+    </div>
+  );
+}
+
+/* ── Closer Leaderboard ──────────────────────────────────────────────────── */
+
+interface CloserStats {
+  id: string;
+  name: string;
+  dealCount: number;
+  frontGross: number;
+  fiTotal: number;
+  totalGross: number;
+}
+
+function CloserLeaderboard({
+  deals,
+  salespeople,
+}: {
+  deals: DealRow[];
+  salespeople: SalespersonRow[];
+}) {
+  const spMap = new Map<string, SalespersonRow>();
+  salespeople.forEach((sp) => spMap.set(sp.id, sp));
+
+  const closerMap = new Map<string, CloserStats>();
+
+  for (const deal of deals) {
+    if (!deal.closer_id) continue;
+
+    if (!closerMap.has(deal.closer_id)) {
+      const sp = spMap.get(deal.closer_id);
+      closerMap.set(deal.closer_id, {
+        id: deal.closer_id,
+        name: sp?.name || "Unknown",
+        dealCount: 0,
+        frontGross: 0,
+        fiTotal: 0,
+        totalGross: 0,
+      });
+    }
+
+    const c = closerMap.get(deal.closer_id)!;
+    c.dealCount += 1;
+    c.frontGross += deal.front_gross || 0;
+    c.fiTotal += deal.fi_total || 0;
+    c.totalGross += deal.total_gross || 0;
+  }
+
+  const ranked = Array.from(closerMap.values())
+    .filter((c) => c.dealCount > 0)
+    .sort((a, b) => b.totalGross - a.totalGross);
+
+  const maxGross = ranked[0]?.totalGross || 1;
+
+  const totals = ranked.reduce(
+    (acc, c) => ({
+      dealCount: acc.dealCount + c.dealCount,
+      frontGross: acc.frontGross + c.frontGross,
+      fiTotal: acc.fiTotal + c.fiTotal,
+      totalGross: acc.totalGross + c.totalGross,
+    }),
+    { dealCount: 0, frontGross: 0, fiTotal: 0, totalGross: 0 }
+  );
+
+  return (
+    <div className="bg-jde-surface border border-jde-border rounded-xl p-5">
+      <h3 className="text-xs font-extrabold text-jde-warning tracking-widest uppercase mb-4">
+        <span className="inline-block w-4 h-0.5 bg-jde-warning mr-2 rounded-full" />
+        Closer Leaderboard
+      </h3>
+
+      {ranked.length === 0 ? (
+        <p className="text-jde-muted text-sm py-6 text-center">
+          No closer data recorded yet
+        </p>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full border-collapse text-sm min-w-[700px]">
+            <thead>
+              <tr>
+                {["#", "Closer", "", "Deals", "Front Gross", "F&I", "Total Gross", "Front PVR"].map(
+                  (h) => (
+                    <th
+                      key={h}
+                      className="bg-jde-panel text-jde-warning px-2.5 py-2 text-left text-[11px] tracking-wider uppercase border-b border-jde-border font-semibold whitespace-nowrap"
+                    >
+                      {h}
+                    </th>
+                  )
+                )}
+              </tr>
+            </thead>
+            <tbody>
+              {ranked.map((closer, i) => {
+                const isTop = i === 0;
+                const frontPVR =
+                  closer.dealCount > 0 ? closer.frontGross / closer.dealCount : 0;
+                const barWidth = (closer.totalGross / maxGross) * 100;
+
+                return (
+                  <tr
+                    key={closer.id}
+                    className={
+                      isTop
+                        ? "bg-jde-warning/5"
+                        : i % 2 === 0
+                        ? ""
+                        : "bg-jde-bg"
+                    }
+                  >
+                    <td className="px-2.5 py-2.5 border-b border-jde-border w-8 text-center">
+                      <span
+                        className={`text-xs font-bold ${
+                          isTop ? "text-jde-warning" : "text-slate-600"
+                        }`}
+                      >
+                        {i + 1}
+                      </span>
+                    </td>
+                    <td className="px-2.5 py-2.5 border-b border-jde-border min-w-[150px]">
+                      <span
+                        className={`text-sm font-semibold ${
+                          isTop ? "text-jde-warning" : "text-jde-muted"
+                        }`}
+                      >
+                        {closer.name}
+                      </span>
+                    </td>
+                    <td className="px-2 py-2.5 border-b border-jde-border min-w-[120px]">
+                      <div className="h-2 bg-jde-panel rounded overflow-hidden">
+                        <div
+                          className="h-full rounded transition-all duration-400"
+                          style={{
+                            width: `${barWidth}%`,
+                            background:
+                              "linear-gradient(90deg, #92400e, #fbbf24)",
+                          }}
+                        />
+                      </div>
+                    </td>
+                    <td className="px-2.5 py-2.5 border-b border-jde-border text-right">
+                      <span className="text-sm text-jde-text font-mono font-semibold">
+                        {closer.dealCount}
+                      </span>
+                    </td>
+                    <td className="px-2.5 py-2.5 border-b border-jde-border text-right">
+                      <span className="text-sm text-jde-warning font-semibold font-mono">
+                        {formatCurrency(closer.frontGross)}
+                      </span>
+                    </td>
+                    <td className="px-2.5 py-2.5 border-b border-jde-border text-right">
+                      <span className="text-sm text-sky-300 font-mono">
+                        {formatCurrency(closer.fiTotal)}
+                      </span>
+                    </td>
+                    <td className="px-2.5 py-2.5 border-b border-jde-border text-right">
+                      <span
+                        className={`text-sm font-bold font-mono ${
+                          isTop ? "text-jde-warning" : "text-jde-cyan"
+                        }`}
+                      >
+                        {formatCurrency(closer.totalGross)}
+                      </span>
+                    </td>
+                    <td className="px-2.5 py-2.5 border-b border-jde-border text-right">
+                      <span className="text-sm text-jde-muted font-mono">
+                        {formatCurrency(frontPVR)}
+                      </span>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+            <tfoot>
+              <tr className="bg-[#0f2744] border-t-2 border-[#1e3a5f]">
+                <td className="px-2.5 py-2.5" />
+                <td className="px-2.5 py-2.5 text-sm font-extrabold text-jde-text tracking-wide">
+                  TOTALS
+                </td>
+                <td className="px-2.5 py-2.5" />
+                <td className="px-2.5 py-2.5 text-right text-sm font-extrabold text-jde-text font-mono">
+                  {totals.dealCount}
+                </td>
+                <td className="px-2.5 py-2.5 text-right text-sm font-extrabold text-jde-warning font-mono">
+                  {formatCurrency(totals.frontGross)}
+                </td>
+                <td className="px-2.5 py-2.5 text-right text-sm font-extrabold text-sky-300 font-mono">
+                  {formatCurrency(totals.fiTotal)}
+                </td>
+                <td className="px-2.5 py-2.5 text-right text-sm font-extrabold text-jde-cyan font-mono">
+                  {formatCurrency(totals.totalGross)}
+                </td>
+                <td className="px-2.5 py-2.5 text-right text-sm font-extrabold text-jde-muted font-mono">
+                  {formatCurrency(
+                    totals.dealCount > 0
+                      ? totals.frontGross / totals.dealCount
+                      : 0
+                  )}
+                </td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      )}
     </div>
   );
 }

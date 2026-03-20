@@ -11,6 +11,7 @@ import RosterTable from "@/components/roster/RosterTable";
 import MailTrackingTable from "@/components/mail-tracking/MailTrackingTable";
 import PerformanceTable from "@/components/performance/PerformanceTable";
 import InventoryTable from "@/components/inventory/InventoryTable";
+import EventKPIPanel from "@/components/kpi/EventKPIPanel";
 
 interface Event {
   id: string;
@@ -43,6 +44,7 @@ const TABS = [
   "Mail Tracking",
   "Recap",
   "Performance",
+  "KPI",
   "Settings",
 ] as const;
 
@@ -56,6 +58,7 @@ const TAB_ICONS: Record<Tab, string> = {
   "Mail Tracking": "\uD83D\uDCEC",
   Recap: "\uD83D\uDCCA",
   Performance: "\uD83C\uDFC6",
+  KPI: "📊",
   Settings: "⚙",
 };
 
@@ -332,6 +335,8 @@ export default function EventDashboard() {
             <MailTrackingTable eventId={eventId} />
           ) : activeTab === "Performance" ? (
             <PerformanceTable eventId={eventId} packNew={packNew} packUsed={packUsed} packCompany={packCompany} />
+          ) : activeTab === "KPI" ? (
+            <EventKPIPanel eventId={eventId} />
           ) : (
             <div className="rounded-xl bg-jde-surface border border-jde-border p-6 min-h-[400px] flex items-center justify-center">
               <p className="text-jde-muted">
